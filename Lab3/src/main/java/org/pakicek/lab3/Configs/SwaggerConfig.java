@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Configuration;
 public class SwaggerConfig {
     @Bean
     public OpenAPI customOpenAPI() {
-        return new OpenAPI().info(new Info().title("Lab 4").version("1.0").description("Lab 4"))
+        return new OpenAPI().info(new Info().title("Lab 5").version("1.0").description("Lab 5"))
                 .addSecurityItem(new SecurityRequirement().addList("JWT"))
                 .components(new Components().addSecuritySchemes("JWT", new SecurityScheme().name("JWT").type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")));
     }
