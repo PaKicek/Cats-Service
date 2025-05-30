@@ -1,0 +1,16 @@
+services:
+  postgres_webgateway:
+    container_name: postgres_personsservice
+    image: postgres
+    hostname: postgres_personsservice
+    restart: unless-stopped
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+volumes:
+  postgres_data:
