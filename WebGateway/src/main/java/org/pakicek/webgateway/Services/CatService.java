@@ -20,7 +20,6 @@ import java.util.List;
 @Service
 public class CatService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final ReplyingKafkaTemplate<String, Object> replyingKafkaTemplate;
     @Autowired
     public CatService(KafkaTemplate<String, Object> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;

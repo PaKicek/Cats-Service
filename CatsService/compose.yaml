@@ -1,5 +1,5 @@
 services:
-  postgres_webgateway:
+  postgres_catsservice:
     container_name: postgres_catsservice
     image: postgres
     hostname: postgres_catsservice

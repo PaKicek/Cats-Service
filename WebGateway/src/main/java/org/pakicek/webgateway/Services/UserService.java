@@ -1,5 +1,6 @@
 package org.pakicek.webgateway.Services;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.pakicek.webgateway.Dtos.AdminDto;
 import org.pakicek.webgateway.Dtos.PersonDto;
 import org.pakicek.webgateway.Dtos.Requests.AdminRequest;
@@ -12,6 +13,7 @@ import org.pakicek.webgateway.Repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.requestreply.ReplyingKafkaTemplate;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -21,16 +23,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @Service
 public class UserService implements UserDetailsService {
     private final UserRepository userRepository;
     private final AdminRepository adminRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ReplyingKafkaTemplate<String, Object, Object> kafkaTemplate;
     private final BCryptPasswordEncoder bCryptPasswordEncoder = bCryptPasswordEncoder();
 
     @Autowired
-    public UserService(UserRepository userRepository, AdminRepository adminRepository, KafkaTemplate<String, Object> kafkaTemplate) {
+    public UserService(UserRepository userRepository, AdminRepository adminRepository, ReplyingKafkaTemplate<String, Object, Object> kafkaTemplate) {
         this.userRepository = userRepository;
         this.adminRepository = adminRepository;
         this.kafkaTemplate = kafkaTemplate;
@@ -39,11 +42,11 @@ public class UserService implements UserDetailsService {
     public BCryptPasswordEncoder bCryptPasswordEncoder() {
         return new BCryptPasswordEncoder();
     }
-    public UserDetails register(UserRequest userRequest) {
+    public UserDetails register(UserRequest userRequest) throws ExecutionException, InterruptedException {
         User founduser = userRepository.findUserByUsername(userRequest.getUsername());
         if (founduser != null) {throw new UsernameNotFoundException("User with username " + userRequest.getUsername() + " already exists");}
         PersonDto person = new PersonDto(userRequest.getName(), userRequest.getBirthdate());
-        kafkaTemplate.send("person-save-topic", person);
+        person = kafkaTemplate.sendAndReceive(new ProducerRecord<>("person-save-topic", person)).get();
         User user = new User(userRequest.getUsername(), bCryptPasswordEncoder.encode(userRequest.getPassword()), person);
         return userRepository.save(user);
     }
@@ -72,8 +75,8 @@ public class UserService implements UserDetailsService {
     @Transactional
     public void deleteUserByUsername(String username) {
         User user = userRepository.findUserByUsername(username);
-        Person person = user.getOwner();
-        personRepository.delete(person);
+        long personId = user.getOwnerId();
+        kafkaTemplate.send("person-deletebyid-topic", personId);
         userRepository.delete(user);
     }
     @Transactional
