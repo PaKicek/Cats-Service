@@ -46,8 +46,8 @@ public class UserService implements UserDetailsService {
         User founduser = userRepository.findUserByUsername(userRequest.getUsername());
         if (founduser != null) {throw new UsernameNotFoundException("User with username " + userRequest.getUsername() + " already exists");}
         PersonDto person = new PersonDto(userRequest.getName(), userRequest.getBirthdate());
-        person = kafkaTemplate.sendAndReceive(new ProducerRecord<>("person-save-topic", person)).get();
-        User user = new User(userRequest.getUsername(), bCryptPasswordEncoder.encode(userRequest.getPassword()), person);
+        person = (PersonDto) kafkaTemplate.sendAndReceive(new ProducerRecord<>("person-save-topic", person)).get().value();
+        User user = new User(userRequest.getUsername(), bCryptPasswordEncoder.encode(userRequest.getPassword()), person.getId());
         return userRepository.save(user);
     }
     public UserDetails register(AdminRequest adminRequest) {

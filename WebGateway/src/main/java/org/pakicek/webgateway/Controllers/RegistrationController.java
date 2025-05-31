@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.concurrent.ExecutionException;
+
 @RestController
 @RequestMapping("/auth/register")
 public class RegistrationController {
@@ -19,7 +21,7 @@ public class RegistrationController {
     }
     @PostMapping("/user")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<?> register(@RequestBody UserRequest userRequest) {
+    public ResponseEntity<?> register(@RequestBody UserRequest userRequest) throws ExecutionException, InterruptedException {
         userService.register(userRequest);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
