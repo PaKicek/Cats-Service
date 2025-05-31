@@ -1,6 +1,8 @@
 package org.pakicek.webgateway.Services;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.pakicek.webgateway.Dtos.CatDto;
+import org.pakicek.webgateway.Dtos.PersonDto;
 import org.pakicek.webgateway.Dtos.Requests.CatRequest;
 import org.pakicek.webgateway.Enums.CatColor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,184 +18,65 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @Service
 public class CatService {
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ReplyingKafkaTemplate<String, Object, Object> replyingkafkaTemplate;
     @Autowired
-    public CatService(KafkaTemplate<String, Object> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+    public CatService(ReplyingKafkaTemplate<String, Object, Object> replyingKafkaTemplate) {
+        this.replyingkafkaTemplate = replyingKafkaTemplate;
     }
-    public CatDto save(CatRequest catRequest) {
-        Cat cat = new Cat(catRequest.getName(), catRequest.getBirthdate(), catRequest.getBreed(), catRequest.getColor(), personRepository.findPersonById((catRequest.getOwnerId())));
-        Person person = personRepository.findPersonById(catRequest.getOwnerId());
-        if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-            if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || person.getId() == user.getOwner().getId()) {
-                catRepository.save(cat);
-                return new CatDto(cat);
-            }
-        }
-        throw new RuntimeException("User not found");
+    public CatDto save(CatRequest catRequest) throws ExecutionException, InterruptedException {
+        return (CatDto) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-save-topic", catRequest)).get().value();
     }
     @Transactional
     public void deleteById(long id) {
-        kafkaTemplate.send("cat-deletebyid-topic", id);
+        replyingkafkaTemplate.send("cat-deletebyid-topic", id);
     }
     public void deleteAll() {
-        kafkaTemplate.send("cat-deleteall-topic", null);
+        replyingkafkaTemplate.send("cat-deleteall-topic", null);
     }
-    public CatDto update(CatRequest catRequest, long id) {
-        Cat cat = catRepository.findCatById(id);
-        cat.setName(catRequest.getName());
-        cat.setBirthDate(catRequest.getBirthdate());
-        cat.setBreed(catRequest.getBreed());
-        cat.setColor(catRequest.getColor());
-        cat.setOwner(personRepository.findPersonById(catRequest.getOwnerId()));
-        catRepository.save(cat);
-        return new CatDto(cat);
+    public CatDto update(CatRequest catRequest, long id) throws ExecutionException, InterruptedException {
+        return (CatDto) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-update-topic", catRequest)).get().value();
     }
-    public boolean addFriend(long id1, long id2) {
-        Cat cat1 = catRepository.findCatById(id1);
-        Cat cat2 = catRepository.findCatById(id2);
-        if (cat1.getId() != cat2.getId() && !cat1.getFriends().contains(cat2) && !cat2.getFriends().contains(cat1)) {
-            cat1.addFriend(cat2);
-            catRepository.save(cat1);
-            catRepository.save(cat2);
-            return true;
-        } else {
-            return false;
-        }
+    public boolean addFriend(long id1, long id2) throws ExecutionException, InterruptedException {
+        return (boolean) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-addfriend-topic", id1)).get().value();
     }
-    public boolean removeFriend(long id1, long id2) {
-        Cat cat1 = catRepository.findCatById(id1);
-        Cat cat2 = catRepository.findCatById(id2);
-        if (cat1.getId() != cat2.getId() && cat1.getFriends().contains(cat2) && cat2.getFriends().contains(cat1)) {
-            cat1.removeFriend(cat2);
-            catRepository.save(cat1);
-            catRepository.save(cat2);
-            return true;
-        } else {
-            return false;
-        }
+    public boolean removeFriend(long id1, long id2) throws ExecutionException, InterruptedException {
+        return (boolean) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-removefriend-topic", id1)).get().value();
     }
-    public List<CatDto> getFriends(long id) {
-        Cat foundcat = catRepository.findCatById(id);
-        Iterable<Cat> list = foundcat.getFriends();
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            dtolist.add(new CatDto(cat));
-        }
-        return dtolist;
+    public List<CatDto> getFriends(long id) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getfriends-topic", id)).get().value();
     }
-    public CatDto getById(long id) {
-        Cat cat = catRepository.findCatById(id);
-        return new CatDto(cat);
+    public CatDto getById(long id) throws ExecutionException, InterruptedException {
+        return (CatDto) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getbyid-topic", id)).get().value();
     }
-    public List<CatDto> getAll() {
-        Iterable<Cat> list = catRepository.findAll();
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getAll() throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getall-topic", "")).get().value();
     }
-    public List<CatDto> getByNameStartingWith(String name) {
-        Iterable<Cat> list = catRepository.findByNameStartingWith(name);
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getByNameStartingWith(String name) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getbynamestartingwith-topic", name)).get().value();
     }
-    public List<CatDto> getByBirthdateBetween(LocalDate startBirthDate, LocalDate endBirthDate) {
-        Iterable<Cat> list = catRepository.findByBirthDateBetween(startBirthDate, endBirthDate);
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getByBirthdateBetween(LocalDate startBirthDate, LocalDate endBirthDate) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getbybirthdatebetween-topic", startBirthDate)).get().value();
     }
-    public List<CatDto> getByBreed(String breed) {
-        Iterable<Cat> list = catRepository.findByBreed(breed);
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getByBreed(String breed) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getbybreed-topic", breed)).get().value();
     }
-    public List<CatDto> getByCatColor(CatColor color) {
-        Iterable<Cat> list = catRepository.findByColor(color);
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getByCatColor(CatColor color) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getbycatcolor-topic", color)).get().value();
     }
-    public List<CatDto> getByOwnerId(long ownerId) {
-        Iterable<Cat> list = catRepository.findByOwner(personRepository.findPersonById(ownerId));
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            dtolist.add(new CatDto(cat));
-        }
-        return dtolist;
+    public List<CatDto> getByOwnerId(long ownerId) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getbyownerid-topic", ownerId)).get().value();
     }
-    public List<CatDto> getFirstSortedByName(Integer count) {
-        PageRequest pageRequest = PageRequest.of(0, count, Sort.by("name").ascending());
-        Iterable<Cat> list = catRepository.findAll(pageRequest);
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getFirstSortedByName(Integer count) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getfirstsortedbyname-topic", count)).get().value();
     }
-    public List<CatDto> getFirstSortedByBirthDate(Integer count) {
-        PageRequest pageRequest = PageRequest.of(0, count, Sort.by("birthDate").ascending());
-        Iterable<Cat> list = catRepository.findAll(pageRequest);
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getFirstSortedByBirthDate(Integer count) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getfirstsortedbybirthdate-topic", count)).get().value();
     }
-    public List<CatDto> getLastSortedByBirthDate(Integer count) {
-        PageRequest pageRequest = PageRequest.of(0, count, Sort.by("birthDate").descending());
-        Iterable<Cat> list = catRepository.findAll(pageRequest);
-        List<CatDto> dtolist = new ArrayList<>();
-        for (Cat cat : list) {
-            if (SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof User user) {
-                if (user.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN")) || userService.isCatOwnedByUser(user.getUsername(), cat.getId())) {
-                    dtolist.add(new CatDto(cat));
-                }
-            }
-        }
-        return dtolist;
+    public List<CatDto> getLastSortedByBirthDate(Integer count) throws ExecutionException, InterruptedException {
+        return (List<CatDto>) replyingkafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getlastsortedbybirthdate-topic", count)).get().value();
     }
 }

@@ -2,6 +2,7 @@ package org.pakicek.webgateway.Services;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.pakicek.webgateway.Dtos.AdminDto;
+import org.pakicek.webgateway.Dtos.CatDto;
 import org.pakicek.webgateway.Dtos.PersonDto;
 import org.pakicek.webgateway.Dtos.Requests.AdminRequest;
 import org.pakicek.webgateway.Dtos.Requests.UserRequest;
@@ -12,7 +13,6 @@ import org.pakicek.webgateway.Repositories.AdminRepository;
 import org.pakicek.webgateway.Repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.requestreply.ReplyingKafkaTemplate;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -29,14 +29,14 @@ import java.util.concurrent.ExecutionException;
 public class UserService implements UserDetailsService {
     private final UserRepository userRepository;
     private final AdminRepository adminRepository;
-    private final ReplyingKafkaTemplate<String, Object, Object> kafkaTemplate;
+    private final ReplyingKafkaTemplate<String, Object, Object> replyingKafkaTemplate;
     private final BCryptPasswordEncoder bCryptPasswordEncoder = bCryptPasswordEncoder();
 
     @Autowired
-    public UserService(UserRepository userRepository, AdminRepository adminRepository, ReplyingKafkaTemplate<String, Object, Object> kafkaTemplate) {
+    public UserService(UserRepository userRepository, AdminRepository adminRepository, ReplyingKafkaTemplate<String, Object, Object> replyingKafkaTemplate) {
         this.userRepository = userRepository;
         this.adminRepository = adminRepository;
-        this.kafkaTemplate = kafkaTemplate;
+        this.replyingKafkaTemplate = replyingKafkaTemplate;
     }
     @Bean
     public BCryptPasswordEncoder bCryptPasswordEncoder() {
@@ -46,7 +46,7 @@ public class UserService implements UserDetailsService {
         User founduser = userRepository.findUserByUsername(userRequest.getUsername());
         if (founduser != null) {throw new UsernameNotFoundException("User with username " + userRequest.getUsername() + " already exists");}
         PersonDto person = new PersonDto(userRequest.getName(), userRequest.getBirthdate());
-        person = (PersonDto) kafkaTemplate.sendAndReceive(new ProducerRecord<>("person-save-topic", person)).get().value();
+        person = (PersonDto) replyingKafkaTemplate.sendAndReceive(new ProducerRecord<>("person-save-topic", person)).get().value();
         User user = new User(userRequest.getUsername(), bCryptPasswordEncoder.encode(userRequest.getPassword()), person.getId());
         return userRepository.save(user);
     }
@@ -76,7 +76,7 @@ public class UserService implements UserDetailsService {
     public void deleteUserByUsername(String username) {
         User user = userRepository.findUserByUsername(username);
         long personId = user.getOwnerId();
-        kafkaTemplate.send("person-deletebyid-topic", personId);
+        replyingKafkaTemplate.send("person-deletebyid-topic", personId);
         userRepository.delete(user);
     }
     @Transactional
@@ -89,12 +89,12 @@ public class UserService implements UserDetailsService {
         if (user == null) {return false;}
         return user.getId() == userId;
     }
-    public boolean isCatOwnedByUser(String username, long catId) {
+    public boolean isCatOwnedByUser(String username, long catId) throws ExecutionException, InterruptedException {
         User user = userRepository.findUserByUsername(username);
-        Cat cat = catRepository.findCatById(catId);
+        CatDto cat = (CatDto) replyingKafkaTemplate.sendAndReceive(new ProducerRecord<>("cat-getbyid-topic", catId)).get().value();
         if (cat == null || user == null) {return false;}
         System.out.println(cat.getOwner().getId() + " " + user.getId());
-        return cat.getOwner().getId() == user.getOwner().getId();
+        return cat.getOwner().getId() == user.getOwnerId();
     }
 
     @Override

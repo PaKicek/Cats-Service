@@ -36,7 +36,7 @@ public class KafkaConfig {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
-        factory.setReplyTemplate(replyingKafkaTemplate(producerFactory(), replyContainer(factory)));
+        factory.setReplyTemplate(kafkaTemplate());
         return factory;
     }
     @Bean
@@ -54,9 +54,9 @@ public class KafkaConfig {
         return new DefaultKafkaProducerFactory<>(configProps);
     }
     @Bean
-    public ConcurrentMessageListenerContainer<String, String> replyContainer(
-            ConcurrentKafkaListenerContainerFactory<String, String> containerFactory) {
-        ConcurrentMessageListenerContainer<String, String> container =
+    public ConcurrentMessageListenerContainer<String, Object> replyContainer(
+            ConcurrentKafkaListenerContainerFactory<String, Object> containerFactory) {
+        ConcurrentMessageListenerContainer<String, Object> container =
                 containerFactory.createContainer("reply-topic");
         container.getContainerProperties().setGroupId("reply-topics");
         return container;
@@ -66,8 +66,8 @@ public class KafkaConfig {
         return new KafkaTemplate<>(producerFactory());
     }
     @Bean
-    public ReplyingKafkaTemplate<String, String, String> replyingKafkaTemplate(
-            ProducerFactory<String, String> producerFactory, ConcurrentMessageListenerContainer<String, String> listenerContainer
+    public ReplyingKafkaTemplate<String, Object, Object> replyingKafkaTemplate(
+            ProducerFactory<String, Object> producerFactory, ConcurrentMessageListenerContainer<String, Object> listenerContainer
     ) {
         return new ReplyingKafkaTemplate<>(producerFactory, listenerContainer);
     }

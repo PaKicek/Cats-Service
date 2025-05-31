@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api/persons")
@@ -21,7 +22,7 @@ public class PersonController {
     }
     @PostMapping("/save")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public PersonDto save(@RequestBody PersonRequest personRequest) {
+    public PersonDto save(@RequestBody PersonRequest personRequest) throws ExecutionException, InterruptedException {
         return personService.save(personRequest);
     }
     @DeleteMapping("/delete/{id}")
@@ -36,42 +37,42 @@ public class PersonController {
     }
     @PutMapping("/put/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN') or @userService.isOwnerIdOwnedByUser(authentication.name, #id)")
-    public PersonDto update(@RequestBody PersonRequest personRequest, @PathVariable long id) {
+    public PersonDto update(@RequestBody PersonRequest personRequest, @PathVariable long id) throws ExecutionException, InterruptedException {
         return personService.update(personRequest, id);
     }
     @GetMapping("/get/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN') or @userService.isOwnerIdOwnedByUser(authentication.name, #id)")
-    public PersonDto getById(@PathVariable long id) {
+    public PersonDto getById(@PathVariable long id) throws ExecutionException, InterruptedException {
         return personService.getById(id);
     }
     @GetMapping("/getall")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public List<PersonDto> getAll() {
+    public List<PersonDto> getAll() throws ExecutionException, InterruptedException {
         return personService.getAll();
     }
     @GetMapping("/get/name/{name}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public List<PersonDto> getByNameStartingWith(@PathVariable @Valid String name) {
+    public List<PersonDto> getByNameStartingWith(@PathVariable @Valid String name) throws ExecutionException, InterruptedException {
         return personService.getByNameStartingWith(name);
     }
     @GetMapping("/get/birthdate/{start}/{end}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public List<PersonDto> getByBirthdateBetween(@PathVariable @Valid LocalDate start, @PathVariable @Valid LocalDate end) {
+    public List<PersonDto> getByBirthdateBetween(@PathVariable @Valid LocalDate start, @PathVariable @Valid LocalDate end) throws ExecutionException, InterruptedException {
         return personService.getByBirthdateBetween(start, end);
     }
     @GetMapping("/getall/sorted/name/{count}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public List<PersonDto> getFirstSortedByName(@PathVariable Integer count) {
+    public List<PersonDto> getFirstSortedByName(@PathVariable Integer count) throws ExecutionException, InterruptedException {
         return personService.getFirstSortedByName(count);
     }
     @GetMapping("/getall/sorted/birthdate/{count}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public List<PersonDto> getFirstSortedByBirthDate(@PathVariable Integer count) {
+    public List<PersonDto> getFirstSortedByBirthDate(@PathVariable Integer count) throws ExecutionException, InterruptedException {
         return personService.getFirstSortedByBirthDate(count);
     }
     @GetMapping("/getall/lastsorted/birthdate/{count}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public List<PersonDto> getLastRevSortedByName(@PathVariable Integer count) {
+    public List<PersonDto> getLastRevSortedByName(@PathVariable Integer count) throws ExecutionException, InterruptedException {
         return personService.getLastSortedByBirthDate(count);
     }
 }
