@@ -1,6 +1,5 @@
 package org.pakicek.webgateway.Configs;
 
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -9,9 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
-import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
-import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
+import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.requestreply.ReplyingKafkaTemplate;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
@@ -32,14 +31,6 @@ public class KafkaConfig {
         return new DefaultKafkaConsumerFactory<>(props);
     }
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, String> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory());
-        factory.setReplyTemplate(kafkaTemplate());
-        return factory;
-    }
-    @Bean
     public ProducerFactory<String, String> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(
@@ -54,20 +45,15 @@ public class KafkaConfig {
         return new DefaultKafkaProducerFactory<>(configProps);
     }
     @Bean
-    public ConcurrentMessageListenerContainer<String, Object> replyContainer(
-            ConcurrentKafkaListenerContainerFactory<String, Object> containerFactory) {
-        ConcurrentMessageListenerContainer<String, Object> container =
-                containerFactory.createContainer("reply-topic");
-        container.getContainerProperties().setGroupId("reply-topics");
-        return container;
-    }
-    @Bean
-    public KafkaTemplate<String, String> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
+    public KafkaMessageListenerContainer<String, Object> replyContainer(
+            ConsumerFactory<String, Object> consumerFactory
+    ) {
+        ContainerProperties containerProperties = new ContainerProperties("reply-topic");
+        return new KafkaMessageListenerContainer<>(consumerFactory, containerProperties);
     }
     @Bean
     public ReplyingKafkaTemplate<String, Object, Object> replyingKafkaTemplate(
-            ProducerFactory<String, Object> producerFactory, ConcurrentMessageListenerContainer<String, Object> listenerContainer
+            ProducerFactory<String, Object> producerFactory, KafkaMessageListenerContainer<String, Object> listenerContainer
     ) {
         return new ReplyingKafkaTemplate<>(producerFactory, listenerContainer);
     }
